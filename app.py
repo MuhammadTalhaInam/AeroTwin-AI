@@ -323,56 +323,199 @@ COMPONENTS = {
 # ============================================================
 
 def make_engine_diagram(selected_component):
-    names = list(COMPONENTS.keys())
-
-    colors = [
-        "#22d3ee" if name == selected_component else "#24364d"
-        for name in names
+    
+def make_engine_diagram(selected_component):
+    components = [
+        ("Fan", 70, 145, 130, 100),
+        ("Compressor", 210, 145, 160, 100),
+        ("Combustor", 380, 145, 145, 100),
+        ("Turbine", 535, 145, 145, 100),
+        ("Exhaust", 690, 145, 130, 100),
     ]
 
     fig = go.Figure()
 
-    # A simplified schematic. It is not a true 3D CAD model.
-    fig.add_trace(
-        go.Bar(
-            x=names,
-            y=[1] * len(names),
-            marker=dict(
-                color=colors,
-                line=dict(color="#67e8f9", width=1.2),
-            ),
-            text=names,
-            textposition="inside",
-            insidetextfont=dict(color="#ffffff", size=12),
-            hovertemplate="<b>%{x}</b><extra>Engine component</extra>",
-        )
+    # Airflow direction
+    fig.add_annotation(
+        x=0.98, y=0.93, xref="paper", yref="paper",
+        text="AIRFLOW  →",
+        showarrow=False,
+        font=dict(color="#67e8f9", size=13),
     )
 
-    fig.update_layout(
-        title="Simplified Turbofan Flow Path",
-        showlegend=False,
-        height=235,
-        bargap=0.18,
-        yaxis=dict(visible=False, range=[0, 1.5]),
-        xaxis=dict(
-            tickfont=dict(color="#cbd5e1", size=10),
-            fixedrange=True,
-        ),
-        annotations=[
-            dict(
-                x=0.5,
-                y=1.12,
-                xref="paper",
-                yref="paper",
-                text="AIRFLOW  →",
-                showarrow=False,
-                font=dict(color="#67e8f9", size=11),
+    # Draw component housings
+    for name, x, y, width, height in components:
+        active = name == selected_component
+        border = "#22d3ee" if active else "#64748b"
+        fill = "rgba(34,211,238,0.13)" if active else "rgba(30,41,59,0.8)"
+
+        fig.add_shape(
+            type="rect",
+            x0=x, y0=y, x1=x + width, y1=y + height,
+            line=dict(color=border, width=2 if active else 1),
+            fillcolor=fill,
+            layer="below",
+        )
+
+        # Internal components differ by engine section
+        cx = x + width / 2
+        cy = y + height / 2
+
+        if name == "Fan":
+            # Fan hub and blades
+            fig.add_shape(
+                type="circle",
+                x0=cx - 13, y0=cy - 13,
+                x1=cx + 13, y1=cy + 13,
+                line=dict(color="#e2e8f0", width=2),
+                fillcolor="#0891b2",
             )
-        ],
-        margin=dict(l=10, r=10, t=65, b=10),
+
+            for angle in range(0, 360, 45):
+                import math
+                a = math.radians(angle)
+                x1 = cx + 14 * math.cos(a)
+                y1 = cy + 14 * math.sin(a)
+                x2 = cx + 43 * math.cos(a + 0.22)
+                y2 = cy + 43 * math.sin(a + 0.22)
+
+                fig.add_trace(go.Scatter(
+                    x=[cx, x2],
+                    y=[cy, y2],
+                    mode="lines",
+                    line=dict(color="#67e8f9", width=4),
+                    hoverinfo="skip",
+                    showlegend=False,
+                ))
+
+        elif name == "Compressor":
+            # Multiple compressor rotor stages
+            for i in range(4):
+                sx = x + 28 + i * 32
+
+                fig.add_shape(
+                    type="line",
+                    x0=sx, y0=cy - 32,
+                    x1=sx + 10, y1=cy + 32,
+                    line=dict(color="#67e8f9", width=3),
+                )
+                fig.add_shape(
+                    type="line",
+                    x0=sx + 10, y0=cy - 32,
+                    x1=sx, y1=cy + 32,
+                    line=dict(color="#a5f3fc", width=2),
+                )
+
+            fig.add_shape(
+                type="line",
+                x0=x + 15, y0=cy,
+                x1=x + width - 15, y1=cy,
+                line=dict(color="#e2e8f0", width=3),
+            )
+
+        elif name == "Combustor":
+            # Combustion chamber and stylized flame
+            fig.add_shape(
+                type="rect",
+                x0=x + 25, y0=cy - 27,
+                x1=x + width - 25, y1=cy + 27,
+                line=dict(color="#fb923c", width=2),
+                fillcolor="rgba(249,115,22,0.12)",
+            )
+
+            fig.add_trace(go.Scatter(
+                x=[cx - 28, cx - 12, cx, cx + 12, cx + 28],
+                y=[cy, cy + 15, cy - 17, cy + 15, cy],
+                mode="lines",
+                fill="toself",
+                fillcolor="rgba(249,115,22,0.55)",
+                line=dict(color="#fb923c", width=2),
+                hoverinfo="skip",
+                showlegend=False,
+            ))
+
+        elif name == "Turbine":
+            # Turbine rotor and blade stages
+            for i in range(3):
+                sx = x + 38 + i * 35
+
+                fig.add_shape(
+                    type="line",
+                    x0=sx, y0=cy - 30,
+                    x1=sx + 14, y1=cy + 30,
+                    line=dict(color="#c4b5fd", width=4),
+                )
+                fig.add_shape(
+                    type="line",
+                    x0=sx + 14, y0=cy - 30,
+                    x1=sx, y1=cy + 30,
+                    line=dict(color="#a78bfa", width=2),
+                )
+
+            fig.add_shape(
+                type="line",
+                x0=x + 15, y0=cy,
+                x1=x + width - 15, y1=cy,
+                line=dict(color="#e2e8f0", width=3),
+            )
+
+        elif name == "Exhaust":
+            # Exhaust duct and expanding nozzle
+            fig.add_shape(
+                type="path",
+                path=(
+                    f"M {x+15},{cy-20} "
+                    f"L {x+width-35},{cy-32} "
+                    f"L {x+width-10},{cy-15} "
+                    f"L {x+width-10},{cy+15} "
+                    f"L {x+width-35},{cy+32} "
+                    f"L {x+15},{cy+20} Z"
+                ),
+                line=dict(color="#67e8f9", width=2),
+                fillcolor="rgba(34,211,238,0.12)",
+            )
+
+            fig.add_annotation(
+                x=x + width - 25, y=cy,
+                text="→",
+                showarrow=False,
+                font=dict(color="#fb923c", size=24),
+            )
+
+        # Component label
+        fig.add_annotation(
+            x=cx,
+            y=y - 18,
+            text=f"<b>{name}</b>",
+            showarrow=False,
+            font=dict(
+                color="#67e8f9" if active else "#e2e8f0",
+                size=12,
+            ),
+        )
+
+    fig.update_layout(
+        title=dict(
+            text="Turbofan Engine — Conceptual Cross-Section",
+            font=dict(color="#f1f5f9", size=17),
+        ),
+        template="plotly_dark",
+        height=360,
+        showlegend=False,
+        margin=dict(l=5, r=5, t=65, b=30),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#cbd5e1"),
+        xaxis=dict(
+            visible=False,
+            range=[45, 850],
+            fixedrange=True,
+        ),
+        yaxis=dict(
+            visible=False,
+            range=[95, 300],
+            fixedrange=True,
+            scaleanchor="x",
+        ),
     )
 
     return fig
