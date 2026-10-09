@@ -1,0 +1,111 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+.stApp {
+    background:
+        radial-gradient(ellipse at 15% 0%, #102b49 0%, transparent 40%),
+        linear-gradient(135deg, #07111f 0%, #0a1424 55%, #08101c 100%);
+    color: #e7f0ff;
+    font-family: 'Inter', sans-serif;
+}
+
+[data-testid="stHeader"] {
+    background: rgba(7, 17, 31, 0.85);
+}
+
+[data-testid="stSidebar"] {
+    background: #091525;
+    border-right: 1px solid #20334b;
+}
+
+.block-container {
+    max-width: 1500px;
+    padding-top: 2rem;
+    padding-bottom: 3rem;
+}
+
+h1, h2, h3 {
+    color: #f2f7ff !important;
+    letter-spacing: -0.5px;
+}
+
+p, label, [data-testid="stMarkdownContainer"] {
+    color: #bdcce0;
+}
+
+div[data-testid="stMetric"] {
+    background: linear-gradient(145deg, #11243a, #0b192a);
+    border: 1px solid #24415e;
+    padding: 18px;
+    border-radius: 15px;
+}
+
+div[data-testid="stMetricLabel"] {
+    color: #9db4ce;
+}
+
+div[data-testid="stMetricValue"] {
+    color: #50d9ff;
+}
+
+.stButton > button {
+    background: linear-gradient(100deg, #087ea4, #16b8d4);
+    color: white;
+    border: 1px solid #45d7f0;
+    border-radius: 10px;
+    padding: 0.65rem 1.1rem;
+    font-weight: 700;
+    transition: all 0.2s ease;
+}
+
+.stButton > button:hover {
+    background: linear-gradient(100deg, #0a94bd, #25c8e5);
+    border-color: #a1f0ff;
+    color: white;
+    transform: translateY(-1px);
+}
+
+div[data-testid="stVerticalBlockBorderWrapper"] {
+    border-color: #223a54;
+    border-radius: 15px;
+}
+
+hr {
+    border-color: #20354b;
+}
+
+[data-testid="stSelectbox"] > div,
+[data-testid="stFileUploader"] {
+    border-radius: 10px;
+}
+
+.aero-eyebrow {
+    color: #51dfff;
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+}
+
+.aero-subtitle {
+    color: #91a9c5;
+    font-size: 0.96rem;
+}
+
+.aero-panel {
+    background: linear-gradient(145deg, #11243a, #0b1727);
+    border: 1px solid #24415e;
+    border-radius: 16px;
+    padding: 20px;
+}
+
+.aero-status {
+    display: inline-block;
+    padding: 5px 10px;
+    border: 1px solid #216b62;
+    border-radius: 30px;
+    background: #102e31;
+    color: #75f0d0;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
