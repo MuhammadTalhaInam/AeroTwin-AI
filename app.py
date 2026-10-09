@@ -32,18 +32,20 @@ st.set_page_config(
 )
 
 # ============================================================
-# 2. CSS
+# 2. THEME
 # ============================================================
 
 CSS = """
 <style>
 .stApp {
-    background: radial-gradient(circle at 85% 0%,
-    rgba(8,145,178,.10), transparent 30%), #0b0f19;
+    background:
+        radial-gradient(circle at 85% 0%,
+        rgba(8,145,178,.12), transparent 32%),
+        #0b0f19;
 }
 .block-container {
-    max-width: 1600px;
-    padding-top: 1.3rem;
+    max-width: 1650px;
+    padding-top: 1.2rem;
     padding-bottom: 2rem;
 }
 [data-testid="stSidebar"] {
@@ -107,10 +109,10 @@ CSS = """
     font-weight:800;
     letter-spacing:1.7px;
     text-transform:uppercase;
-    margin:10px 0;
+    margin:12px 0;
 }
 .aero-metric {
-    min-height:130px;
+    min-height:125px;
     padding:17px;
     border:1px solid rgba(148,163,184,.18);
     border-radius:14px;
@@ -125,7 +127,7 @@ CSS = """
 }
 .metric-value {
     color:#f8fafc;
-    font-size:28px;
+    font-size:27px;
     font-weight:850;
     margin-top:15px;
     overflow-wrap:anywhere;
@@ -136,7 +138,7 @@ CSS = """
     margin-top:8px;
 }
 .component-panel {
-    background:rgba(17,24,39,.75);
+    background:rgba(17,24,39,.78);
     border:1px solid rgba(148,163,184,.18);
     border-radius:14px;
     padding:18px;
@@ -194,7 +196,7 @@ st.html("""
     <div style="color:#e2e8f0;font-size:11px;font-weight:800;
                 letter-spacing:1px;">AI PROGNOSTICS</div>
     <div style="color:#94a3b8;font-size:10px;margin-top:5px;">
-      RESEARCH PROTOTYPE · v1.2
+      RESEARCH PROTOTYPE · v2.0
     </div>
   </div>
 </div>
@@ -203,7 +205,8 @@ st.html("""
 
 st.title("Mission Control")
 st.caption(
-    "Turbofan engine explorer · Historical sensor intelligence · RUL estimation"
+    "Interactive turbofan visualization · Historical sensor intelligence "
+    "· Remaining Useful Life estimation"
 )
 
 st.warning(
@@ -213,7 +216,7 @@ st.warning(
 )
 
 # ============================================================
-# 4. HELPERS
+# 4. GENERAL HELPERS
 # ============================================================
 
 def section_label(text):
@@ -256,300 +259,460 @@ def chart_style(fig):
 COMPONENTS = {
     "Fan": {
         "purpose": (
-            "The fan accelerates a large amount of air. In a high-bypass "
-            "turbofan, much of the thrust comes from the bypass airflow."
+            "The fan accelerates incoming air. In a high-bypass turbofan, "
+            "a substantial portion of thrust comes from bypass airflow."
         ),
         "engineering": (
             "Engineering topics: airflow, blade loading, rotational speed, "
-            "vibration, and aerodynamic efficiency."
+            "vibration and aerodynamic efficiency."
         ),
         "sensors": ["sensor_2", "sensor_3", "sensor_4"],
     },
     "Compressor": {
         "purpose": (
             "The compressor raises the pressure of incoming air before "
-            "it enters the combustor."
+            "the air enters the combustor."
         ),
         "engineering": (
-            "Engineering topics: pressure rise, compressor efficiency, "
-            "temperature rise, and flow stability."
+            "Engineering topics: pressure rise, temperature rise, "
+            "efficiency and flow stability."
         ),
         "sensors": ["sensor_2", "sensor_7", "sensor_11", "sensor_12"],
     },
     "Combustor": {
         "purpose": (
-            "The combustor mixes compressed air with fuel and releases "
-            "heat to produce high-energy gas."
+            "The combustor adds heat by burning fuel in compressed air, "
+            "creating high-energy gas."
         ),
         "engineering": (
             "Engineering topics: heat addition, combustion stability, "
-            "fuel-air mixing, and gas temperature."
+            "fuel-air mixing and gas temperature."
         ),
         "sensors": ["sensor_3", "sensor_4", "sensor_11"],
     },
     "Turbine": {
         "purpose": (
-            "The turbine extracts energy from hot gases to drive the "
+            "The turbine extracts energy from hot gas to drive the "
             "compressor and fan through rotating shafts."
         ),
         "engineering": (
             "Engineering topics: turbine work, thermal loading, shaft "
-            "power, efficiency, and material temperature limits."
+            "power, efficiency and material temperature limits."
         ),
         "sensors": ["sensor_4", "sensor_11", "sensor_14", "sensor_17"],
     },
     "Exhaust": {
         "purpose": (
-            "The exhaust system guides gas out of the engine. The final "
-            "gas momentum contributes to engine thrust."
+            "The exhaust guides gas out of the engine. The exiting gas "
+            "momentum contributes to engine thrust."
         ),
         "engineering": (
-            "Engineering topics: exhaust velocity, pressure, temperature, "
+            "Engineering topics: exhaust velocity, pressure, temperature "
             "and nozzle flow."
         ),
         "sensors": ["sensor_7", "sensor_12", "sensor_20", "sensor_21"],
     },
 }
 
+COMPONENT_COLORS = {
+    "Fan": "#22d3ee",
+    "Compressor": "#60a5fa",
+    "Combustor": "#fb923c",
+    "Turbine": "#c084fc",
+    "Exhaust": "#34d399",
+}
+
 # ============================================================
-# 6. INTERACTIVE ENGINE DIAGRAM
-# Corrected: only ONE function definition
+# 6. 3D GEOMETRY HELPERS
 # ============================================================
 
-def make_engine_diagram(selected_component):
-    components = [
-        ("Fan", 70, 145, 130, 100),
-        ("Compressor", 210, 145, 160, 100),
-        ("Combustor", 380, 145, 145, 100),
-        ("Turbine", 535, 145, 145, 100),
-        ("Exhaust", 690, 145, 130, 100),
-    ]
+def add_x_cylinder(
+    fig,
+    x0,
+    x1,
+    radius,
+    color,
+    name,
+    selected=False,
+    opacity=1.0,
+    segments=28,
+):
+    """
+    Create a cylindrical surface along the X axis using Plotly Mesh3d.
+    The cylinder is illustrative geometry, not CAD-accurate.
+    """
+    vertices_x = []
+    vertices_y = []
+    vertices_z = []
 
-    fig = go.Figure()
+    for x in (x0, x1):
+        for i in range(segments):
+            angle = 2 * math.pi * i / segments
+            vertices_x.append(x)
+            vertices_y.append(radius * math.cos(angle))
+            vertices_z.append(radius * math.sin(angle))
 
-    # Airflow arrow
-    fig.add_annotation(
-        x=0.97,
-        y=0.98,
-        xref="paper",
-        yref="paper",
-        text="AIRFLOW  →",
-        showarrow=False,
-        font=dict(color="#67e8f9", size=13),
+    faces_i = []
+    faces_j = []
+    faces_k = []
+
+    for i in range(segments):
+        nxt = (i + 1) % segments
+
+        a = i
+        b = nxt
+        c = segments + i
+        d = segments + nxt
+
+        faces_i.extend([a, a, b, b])
+        faces_j.extend([b, c, c, d])
+        faces_k.extend([c, b, d, c])
+
+    # End caps
+    left_center = len(vertices_x)
+    right_center = left_center + 1
+
+    vertices_x.extend([x0, x1])
+    vertices_y.extend([0, 0])
+    vertices_z.extend([0, 0])
+
+    for i in range(segments):
+        nxt = (i + 1) % segments
+
+        faces_i.append(left_center)
+        faces_j.append(nxt)
+        faces_k.append(i)
+
+        faces_i.append(right_center)
+        faces_j.append(segments + i)
+        faces_k.append(segments + nxt)
+
+    fig.add_trace(
+        go.Mesh3d(
+            x=vertices_x,
+            y=vertices_y,
+            z=vertices_z,
+            i=faces_i,
+            j=faces_j,
+            k=faces_k,
+            color=color,
+            opacity=opacity,
+            flatshading=False,
+            name=name,
+            legendgroup=name,
+            hovertemplate=f"{name}<extra></extra>",
+            showscale=False,
+            lighting=dict(
+                ambient=0.48,
+                diffuse=0.8,
+                specular=0.45,
+                roughness=0.42,
+                fresnel=0.15,
+            ),
+            lightposition=dict(x=100, y=120, z=150),
+        )
     )
 
-    # Draw each engine section
-    for name, x, y, width, height in components:
-        active = name == selected_component
-        border = "#22d3ee" if active else "#64748b"
-        fill = (
-            "rgba(34,211,238,0.13)"
-            if active
-            else "rgba(30,41,59,0.8)"
-        )
 
-        fig.add_shape(
-            type="rect",
-            x0=x,
-            y0=y,
-            x1=x + width,
-            y1=y + height,
-            line=dict(color=border, width=3 if active else 1.5),
-            fillcolor=fill,
-            layer="below",
-        )
+def add_fan_blades(
+    fig,
+    x,
+    inner_radius,
+    outer_radius,
+    count,
+    color,
+    name,
+    selected=False,
+):
+    """
+    Add stylized 3D blade surfaces arranged around the engine axis.
+    """
+    blade_color = "#67e8f9" if selected else color
 
-        cx = x + width / 2
-        cy = y + height / 2
+    for blade_index in range(count):
+        angle = 2 * math.pi * blade_index / count
 
-        # FAN: hub and radial blades
-        if name == "Fan":
-            for angle in range(0, 360, 45):
-                a = math.radians(angle)
-                x2 = cx + 43 * math.cos(a)
-                y2 = cy + 35 * math.sin(a)
+        # Slight blade sweep creates a more turbine-like appearance.
+        angle_inner = angle - 0.12
+        angle_outer = angle + 0.12
 
-                fig.add_trace(
-                    go.Scatter(
-                        x=[cx, x2],
-                        y=[cy, y2],
-                        mode="lines",
-                        line=dict(color="#67e8f9", width=5),
-                        hoverinfo="skip",
-                        showlegend=False,
-                    )
-                )
+        x_front = x - 0.055
+        x_back = x + 0.055
 
-            fig.add_shape(
-                type="circle",
-                x0=cx - 13,
-                y0=cy - 13,
-                x1=cx + 13,
-                y1=cy + 13,
-                line=dict(color="#e2e8f0", width=2),
-                fillcolor="#0891b2",
-            )
+        points = [
+            (x_front, inner_radius * math.cos(angle_inner),
+             inner_radius * math.sin(angle_inner)),
+            (x_front, outer_radius * math.cos(angle_outer),
+             outer_radius * math.sin(angle_outer)),
+            (x_back, outer_radius * math.cos(angle_outer),
+             outer_radius * math.sin(angle_outer)),
+            (x_back, inner_radius * math.cos(angle_inner),
+             inner_radius * math.sin(angle_inner)),
+        ]
 
-        # COMPRESSOR: multiple stylized blade stages
-        elif name == "Compressor":
-            for i in range(4):
-                sx = x + 28 + i * 32
+        bx = [p[0] for p in points]
+        by = [p[1] for p in points]
+        bz = [p[2] for p in points]
 
-                fig.add_shape(
-                    type="line",
-                    x0=sx,
-                    y0=cy - 32,
-                    x1=sx + 10,
-                    y1=cy + 32,
-                    line=dict(color="#67e8f9", width=4),
-                )
-
-                fig.add_shape(
-                    type="line",
-                    x0=sx + 10,
-                    y0=cy - 32,
-                    x1=sx,
-                    y1=cy + 32,
-                    line=dict(color="#a5f3fc", width=2),
-                )
-
-            fig.add_shape(
-                type="line",
-                x0=x + 15,
-                y0=cy,
-                x1=x + width - 15,
-                y1=cy,
-                line=dict(color="#e2e8f0", width=3),
-            )
-
-        # COMBUSTOR: chamber and flame
-        elif name == "Combustor":
-            fig.add_shape(
-                type="rect",
-                x0=x + 25,
-                y0=cy - 27,
-                x1=x + width - 25,
-                y1=cy + 27,
-                line=dict(color="#fb923c", width=2),
-                fillcolor="rgba(249,115,22,0.12)",
-            )
-
-            fig.add_trace(
-                go.Scatter(
-                    x=[
-                        cx - 30, cx - 20, cx - 8,
-                        cx, cx + 10, cx + 22, cx + 30
-                    ],
-                    y=[
-                        cy, cy + 5, cy + 20,
-                        cy - 17, cy + 18, cy + 5, cy
-                    ],
-                    mode="lines",
-                    fill="toself",
-                    fillcolor="rgba(249,115,22,0.55)",
-                    line=dict(color="#fb923c", width=2),
-                    hoverinfo="skip",
-                    showlegend=False,
-                )
-            )
-
-        # TURBINE: stylized rotor stages
-        elif name == "Turbine":
-            for i in range(3):
-                sx = x + 38 + i * 35
-
-                fig.add_shape(
-                    type="line",
-                    x0=sx,
-                    y0=cy - 30,
-                    x1=sx + 14,
-                    y1=cy + 30,
-                    line=dict(color="#c4b5fd", width=4),
-                )
-
-                fig.add_shape(
-                    type="line",
-                    x0=sx + 14,
-                    y0=cy - 30,
-                    x1=sx,
-                    y1=cy + 30,
-                    line=dict(color="#a78bfa", width=2),
-                )
-
-            fig.add_shape(
-                type="line",
-                x0=x + 15,
-                y0=cy,
-                x1=x + width - 15,
-                y1=cy,
-                line=dict(color="#e2e8f0", width=3),
-            )
-
-        # EXHAUST: nozzle-like flow path
-        elif name == "Exhaust":
-            fig.add_shape(
-                type="path",
-                path=(
-                    f"M {x+15},{cy-20} "
-                    f"L {x+width-35},{cy-32} "
-                    f"L {x+width-10},{cy-15} "
-                    f"L {x+width-10},{cy+15} "
-                    f"L {x+width-35},{cy+32} "
-                    f"L {x+15},{cy+20} Z"
+        fig.add_trace(
+            go.Mesh3d(
+                x=bx,
+                y=by,
+                z=bz,
+                i=[0, 0],
+                j=[1, 2],
+                k=[2, 3],
+                color=blade_color,
+                opacity=0.96,
+                name=name,
+                legendgroup=name,
+                hovertemplate=f"{name} blade<extra></extra>",
+                showscale=False,
+                flatshading=False,
+                lighting=dict(
+                    ambient=0.55,
+                    diffuse=0.85,
+                    specular=0.4,
+                    roughness=0.4,
                 ),
-                line=dict(color="#67e8f9", width=2),
-                fillcolor="rgba(34,211,238,0.12)",
             )
-
-            fig.add_annotation(
-                x=x + width - 25,
-                y=cy,
-                text="→",
-                showarrow=False,
-                font=dict(color="#fb923c", size=24),
-            )
-
-        # Component labels beneath the boxes
-        fig.add_annotation(
-            x=cx,
-            y=y - 18,
-            text=f"<b>{name}</b>",
-            showarrow=False,
-            font=dict(
-                color="#67e8f9" if active else "#e2e8f0",
-                size=12,
-            ),
         )
+
+
+def add_engine_rings(fig, x, radius, color, name):
+    """Add thin ring details around a cylindrical engine section."""
+    angles = [
+        2 * math.pi * i / 80
+        for i in range(81)
+    ]
+
+    fig.add_trace(
+        go.Scatter3d(
+            x=[x] * len(angles),
+            y=[radius * math.cos(a) for a in angles],
+            z=[radius * math.sin(a) for a in angles],
+            mode="lines",
+            line=dict(color=color, width=4),
+            name=name,
+            hovertemplate=f"{name}<extra></extra>",
+            showlegend=False,
+        )
+    )
+
+
+# ============================================================
+# 7. BUILD THE INTERACTIVE 3D TURBOFAN
+# ============================================================
+
+def make_3d_engine(selected_component):
+    fig = go.Figure()
+
+    # Each section occupies a different axial position.
+    sections = {
+        "Fan": {
+            "x0": 0.15, "x1": 0.72,
+            "radius": 1.05, "inner": 0.22,
+        },
+        "Compressor": {
+            "x0": 0.85, "x1": 2.05,
+            "radius": 0.77, "inner": 0.20,
+        },
+        "Combustor": {
+            "x0": 2.12, "x1": 3.05,
+            "radius": 0.69, "inner": 0.26,
+        },
+        "Turbine": {
+            "x0": 3.13, "x1": 4.10,
+            "radius": 0.72, "inner": 0.20,
+        },
+        "Exhaust": {
+            "x0": 4.18, "x1": 5.15,
+            "radius": 0.54, "inner": 0.18,
+        },
+    }
+
+    # Main outer casing sections.
+    for name, section in sections.items():
+        active = name == selected_component
+        base_color = COMPONENT_COLORS[name]
+
+        # A highlighted section becomes brighter.
+        color = "#67e8f9" if active else base_color
+        opacity = 0.82 if active else 0.52
+
+        add_x_cylinder(
+            fig,
+            section["x0"],
+            section["x1"],
+            section["radius"],
+            color,
+            name,
+            selected=active,
+            opacity=opacity,
+            segments=36,
+        )
+
+        add_engine_rings(
+            fig,
+            section["x0"],
+            section["radius"],
+            "#e2e8f0" if active else "#64748b",
+            name,
+        )
+
+        add_engine_rings(
+            fig,
+            section["x1"],
+            section["radius"],
+            "#e2e8f0" if active else "#64748b",
+            name,
+        )
+
+    # Central shaft through the engine.
+    add_x_cylinder(
+        fig,
+        0.2,
+        5.0,
+        0.15,
+        "#cbd5e1",
+        "Central shaft",
+        opacity=0.92,
+        segments=24,
+    )
+
+    # Fan rotor and blades.
+    add_x_cylinder(
+        fig, 0.25, 0.40, 0.28,
+        "#94a3b8", "Fan hub", opacity=1.0,
+    )
+
+    add_fan_blades(
+        fig,
+        x=0.43,
+        inner_radius=0.25,
+        outer_radius=0.98,
+        count=14,
+        color=COMPONENT_COLORS["Fan"],
+        name="Fan",
+        selected=selected_component == "Fan",
+    )
+
+    # Compressor: several stages of small rotor blades.
+    for stage_x in [0.98, 1.25, 1.52, 1.79]:
+        add_fan_blades(
+            fig,
+            x=stage_x,
+            inner_radius=0.23,
+            outer_radius=0.70,
+            count=10,
+            color=COMPONENT_COLORS["Compressor"],
+            name="Compressor",
+            selected=selected_component == "Compressor",
+        )
+
+    # Combustor: inner chamber and outer combustion casing.
+    add_x_cylinder(
+        fig,
+        2.18,
+        2.98,
+        0.43,
+        "#fb923c",
+        "Combustor inner chamber",
+        opacity=0.96,
+        segments=32,
+    )
+
+    # Turbine rotor stages.
+    for stage_x in [3.35, 3.72, 4.00]:
+        add_fan_blades(
+            fig,
+            x=stage_x,
+            inner_radius=0.22,
+            outer_radius=0.66,
+            count=12,
+            color=COMPONENT_COLORS["Turbine"],
+            name="Turbine",
+            selected=selected_component == "Turbine",
+        )
+
+    # Exhaust nozzle: gradually changing radius.
+    add_x_cylinder(
+        fig,
+        4.25,
+        5.02,
+        0.43,
+        COMPONENT_COLORS["Exhaust"],
+        "Exhaust inner nozzle",
+        opacity=0.78,
+        segments=32,
+    )
+
+    # Add axial flow direction.
+    fig.add_trace(
+        go.Scatter3d(
+            x=[0.1, 5.35],
+            y=[0, 0],
+            z=[1.28, 1.28],
+            mode="lines+text",
+            line=dict(color="#67e8f9", width=5),
+            text=["AIR INLET", "EXHAUST FLOW"],
+            textposition="top center",
+            textfont=dict(color="#a5f3fc", size=10),
+            name="Flow direction",
+            hoverinfo="skip",
+            showlegend=False,
+        )
+    )
 
     fig.update_layout(
         title=dict(
-            text="Turbofan Engine — Conceptual Cross-Section",
-            font=dict(color="#f1f5f9", size=17),
+            text=(
+                "INTERACTIVE TURBOFAN · "
+                + html.escape(selected_component.upper())
+                + " SELECTED"
+            ),
+            font=dict(color="#f1f5f9", size=16),
+            x=0.02,
         ),
         template="plotly_dark",
-        height=360,
-        showlegend=False,
-        margin=dict(l=5, r=5, t=65, b=30),
+        height=600,
+        margin=dict(l=0, r=0, t=60, b=0),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(
-            visible=False,
-            range=[45, 850],
-            fixedrange=True,
+        showlegend=False,
+        scene=dict(
+            bgcolor="rgba(0,0,0,0)",
+            xaxis=dict(
+                title="Engine axis",
+                visible=False,
+                range=[-0.1, 5.5],
+                showbackground=False,
+            ),
+            yaxis=dict(
+                visible=False,
+                range=[-1.45, 1.45],
+                showbackground=False,
+            ),
+            zaxis=dict(
+                visible=False,
+                range=[-1.45, 1.55],
+                showbackground=False,
+            ),
+            aspectmode="manual",
+            aspectratio=dict(x=2.7, y=1.25, z=1.25),
+            camera=dict(
+                eye=dict(x=1.65, y=1.7, z=1.15),
+                up=dict(x=0, y=0, z=1),
+            ),
         ),
-        yaxis=dict(
-            visible=False,
-            range=[95, 300],
-            fixedrange=True,
-            scaleanchor="x",
-        ),
+        uirevision="aerotwin-engine-camera",
     )
 
     return fig
 
 
 # ============================================================
-# 7. LOAD MODEL AND DATA
+# 8. LOAD MODEL AND HISTORICAL DATA
 # ============================================================
 
 @st.cache_resource
@@ -568,7 +731,7 @@ def get_data():
 
 
 try:
-    with st.spinner("Initializing AeroTwin..."):
+    with st.spinner("Initializing AeroTwin engine intelligence..."):
         model = get_model()
         feature_names = get_features()
         data = get_data()
@@ -597,7 +760,7 @@ if missing:
     st.stop()
 
 # ============================================================
-# 8. SIDEBAR
+# 9. SIDEBAR
 # ============================================================
 
 st.sidebar.markdown("## ✈️ AEROTWIN")
@@ -632,7 +795,7 @@ st.sidebar.caption("44 engineered model inputs")
 st.sidebar.caption("No live telemetry")
 
 # ============================================================
-# 9. ENGINE HISTORY
+# 10. SELECTED ENGINE HISTORY
 # ============================================================
 
 history = (
@@ -651,10 +814,13 @@ component_names = list(COMPONENTS.keys())
 if "selected_component" not in st.session_state:
     st.session_state["selected_component"] = "Compressor"
 
+if st.session_state["selected_component"] not in component_names:
+    st.session_state["selected_component"] = "Compressor"
+
 selected_component = st.session_state["selected_component"]
 
 # ============================================================
-# 10. ENGINE WORKSPACE AND EXPLORER
+# 11. ENGINE WORKSPACE
 # ============================================================
 
 section_label("ENGINE WORKSPACE")
@@ -665,19 +831,14 @@ st.caption(
 )
 
 if page in ("Mission Control", "Engine Explorer"):
-    section_label("INTERACTIVE TURBOFAN EXPLORER")
+    section_label("INTERACTIVE 3D TURBOFAN")
 
     st.markdown(
-        "Select an engine section to explore its purpose, engineering "
-        "concepts and available historical sensor trends."
+        "Select a component below. Drag to rotate, scroll to zoom, "
+        "and use the interactive 3D controls to explore the model."
     )
 
-    st.plotly_chart(
-        make_engine_diagram(selected_component),
-        use_container_width=True,
-        config={"displayModeBar": False},
-    )
-
+    # Component selection controls.
     component_cols = st.columns(5)
 
     for index, name in enumerate(component_names):
@@ -696,11 +857,40 @@ if page in ("Mission Control", "Engine Explorer"):
                 st.rerun()
 
     selected_component = st.session_state["selected_component"]
+
+    # Display the interactive model.
+    with st.spinner("Building interactive 3D engine geometry..."):
+        engine_figure = make_3d_engine(selected_component)
+
+    st.plotly_chart(
+        engine_figure,
+        use_container_width=True,
+        config={
+            "displayModeBar": True,
+            "scrollZoom": True,
+            "displaylogo": False,
+            "modeBarButtonsToRemove": [
+                "toImage",
+                "lasso2d",
+                "select2d",
+            ],
+        },
+        key="aerotwin_3d_engine",
+    )
+
+    st.caption(
+        "Conceptual 3D visualization generated from simplified geometry. "
+        "It is not a dimensionally accurate CAD model, CFD simulation, "
+        "or live engine digital twin."
+    )
+
     component_info = COMPONENTS[selected_component]
+    component_color = COMPONENT_COLORS[selected_component]
 
     st.markdown(
         f"""
-        <div class="component-panel">
+        <div class="component-panel"
+             style="border-top:3px solid {component_color};">
           <div class="component-name">
             {html.escape(selected_component)}
           </div>
@@ -715,18 +905,12 @@ if page in ("Mission Control", "Engine Explorer"):
         unsafe_allow_html=True,
     )
 
-    st.caption(
-        "This is a simplified conceptual flow path, not a dimensionally "
-        "accurate engine model. Component-to-sensor associations are "
-        "exploratory topics, not verified direct measurements."
-    )
-
     section_label("COMPONENT SENSOR EXPLORER")
     st.subheader(f"Historical readings — {selected_component}")
 
     relevant_sensors = [
         sensor
-        for sensor in COMPONENTS[selected_component]["sensors"]
+        for sensor in component_info["sensors"]
         if sensor in history.columns
     ]
 
@@ -753,12 +937,12 @@ if page in ("Mission Control", "Engine Explorer"):
     )
 
     st.caption(
-        "This chart displays historical readings. It does not prove that "
-        "the selected sensor directly measures the selected component."
+        "These are historical sensor readings. The selected sensor is not "
+        "a verified direct measurement of the selected physical component."
     )
 
 # ============================================================
-# 11. DATASET OVERVIEW
+# 12. DATASET OVERVIEW
 # ============================================================
 
 section_label("DATASET OVERVIEW")
@@ -789,7 +973,7 @@ with overview[2]:
     )
 
 # ============================================================
-# 12. RUN MODEL ANALYSIS
+# 13. RUN MODEL ANALYSIS
 # ============================================================
 
 col_button, col_mode = st.columns([1.4, 1])
@@ -843,7 +1027,7 @@ has_result = (
 )
 
 # ============================================================
-# 13. PREDICTIONS AND SENSOR ANALYSIS
+# 14. PREDICTIONS AND SENSOR ANALYSIS
 # ============================================================
 
 if has_result:
@@ -992,7 +1176,7 @@ if has_result:
         )
 
     # ========================================================
-    # 14. EXPORT ANALYSIS
+    # 15. EXPORT ANALYSIS
     # ========================================================
 
     section_label("ENGINEERING REPORTS")
@@ -1018,7 +1202,7 @@ else:
     )
 
 # ============================================================
-# 15. DATA LABORATORY
+# 16. DATA LABORATORY
 # ============================================================
 
 if page == "Data Laboratory":
@@ -1040,7 +1224,7 @@ if page == "Data Laboratory":
     )
 
 # ============================================================
-# 16. FOOTER
+# 17. FOOTER
 # ============================================================
 
 st.divider()
@@ -1050,7 +1234,7 @@ st.html("""
             line-height:1.9;padding:12px 0;">
   <strong style="color:#cbd5e1;letter-spacing:1px;">AEROTWIN AI</strong>
   <br>
-  Interactive Engine Explorer · NASA C-MAPSS FD001 · v1.2
+  Interactive 3D Engine Explorer · NASA C-MAPSS FD001 · v2.0
   <br>
   Historical research prototype — not certified for operational decisions.
 </div>
