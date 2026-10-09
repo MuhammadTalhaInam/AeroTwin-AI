@@ -1,6 +1,7 @@
 
 import sys
 import html
+import math
 from pathlib import Path
 
 import streamlit as st
@@ -37,10 +38,8 @@ st.set_page_config(
 CSS = """
 <style>
 .stApp {
-    background:
-        radial-gradient(circle at 85% 0%,
-        rgba(8,145,178,.10), transparent 30%),
-        #0b0f19;
+    background: radial-gradient(circle at 85% 0%,
+    rgba(8,145,178,.10), transparent 30%), #0b0f19;
 }
 .block-container {
     max-width: 1600px;
@@ -170,7 +169,6 @@ hr {border-color:rgba(148,163,184,.15);}
 """
 st.markdown(CSS, unsafe_allow_html=True)
 
-# Load existing project CSS if present.
 css_path = BASE_DIR / "assets" / "aerotwin.css"
 if css_path.exists():
     st.markdown(
@@ -257,7 +255,6 @@ def chart_style(fig):
 
 COMPONENTS = {
     "Fan": {
-        "position": 0,
         "purpose": (
             "The fan accelerates a large amount of air. In a high-bypass "
             "turbofan, much of the thrust comes from the bypass airflow."
@@ -269,7 +266,6 @@ COMPONENTS = {
         "sensors": ["sensor_2", "sensor_3", "sensor_4"],
     },
     "Compressor": {
-        "position": 1,
         "purpose": (
             "The compressor raises the pressure of incoming air before "
             "it enters the combustor."
@@ -281,7 +277,6 @@ COMPONENTS = {
         "sensors": ["sensor_2", "sensor_7", "sensor_11", "sensor_12"],
     },
     "Combustor": {
-        "position": 2,
         "purpose": (
             "The combustor mixes compressed air with fuel and releases "
             "heat to produce high-energy gas."
@@ -293,7 +288,6 @@ COMPONENTS = {
         "sensors": ["sensor_3", "sensor_4", "sensor_11"],
     },
     "Turbine": {
-        "position": 3,
         "purpose": (
             "The turbine extracts energy from hot gases to drive the "
             "compressor and fan through rotating shafts."
@@ -305,7 +299,6 @@ COMPONENTS = {
         "sensors": ["sensor_4", "sensor_11", "sensor_14", "sensor_17"],
     },
     "Exhaust": {
-        "position": 4,
         "purpose": (
             "The exhaust system guides gas out of the engine. The final "
             "gas momentum contributes to engine thrust."
@@ -320,10 +313,9 @@ COMPONENTS = {
 
 # ============================================================
 # 6. INTERACTIVE ENGINE DIAGRAM
+# Corrected: only ONE function definition
 # ============================================================
 
-def make_engine_diagram(selected_component):
-    
 def make_engine_diagram(selected_component):
     components = [
         ("Fan", 70, 145, 130, 100),
@@ -335,132 +327,166 @@ def make_engine_diagram(selected_component):
 
     fig = go.Figure()
 
-    # Airflow direction
+    # Airflow arrow
     fig.add_annotation(
-        x=0.98, y=0.93, xref="paper", yref="paper",
+        x=0.97,
+        y=0.98,
+        xref="paper",
+        yref="paper",
         text="AIRFLOW  →",
         showarrow=False,
         font=dict(color="#67e8f9", size=13),
     )
 
-    # Draw component housings
+    # Draw each engine section
     for name, x, y, width, height in components:
         active = name == selected_component
         border = "#22d3ee" if active else "#64748b"
-        fill = "rgba(34,211,238,0.13)" if active else "rgba(30,41,59,0.8)"
+        fill = (
+            "rgba(34,211,238,0.13)"
+            if active
+            else "rgba(30,41,59,0.8)"
+        )
 
         fig.add_shape(
             type="rect",
-            x0=x, y0=y, x1=x + width, y1=y + height,
-            line=dict(color=border, width=2 if active else 1),
+            x0=x,
+            y0=y,
+            x1=x + width,
+            y1=y + height,
+            line=dict(color=border, width=3 if active else 1.5),
             fillcolor=fill,
             layer="below",
         )
 
-        # Internal components differ by engine section
         cx = x + width / 2
         cy = y + height / 2
 
+        # FAN: hub and radial blades
         if name == "Fan":
-            # Fan hub and blades
+            for angle in range(0, 360, 45):
+                a = math.radians(angle)
+                x2 = cx + 43 * math.cos(a)
+                y2 = cy + 35 * math.sin(a)
+
+                fig.add_trace(
+                    go.Scatter(
+                        x=[cx, x2],
+                        y=[cy, y2],
+                        mode="lines",
+                        line=dict(color="#67e8f9", width=5),
+                        hoverinfo="skip",
+                        showlegend=False,
+                    )
+                )
+
             fig.add_shape(
                 type="circle",
-                x0=cx - 13, y0=cy - 13,
-                x1=cx + 13, y1=cy + 13,
+                x0=cx - 13,
+                y0=cy - 13,
+                x1=cx + 13,
+                y1=cy + 13,
                 line=dict(color="#e2e8f0", width=2),
                 fillcolor="#0891b2",
             )
 
-            for angle in range(0, 360, 45):
-                import math
-                a = math.radians(angle)
-                x1 = cx + 14 * math.cos(a)
-                y1 = cy + 14 * math.sin(a)
-                x2 = cx + 43 * math.cos(a + 0.22)
-                y2 = cy + 43 * math.sin(a + 0.22)
-
-                fig.add_trace(go.Scatter(
-                    x=[cx, x2],
-                    y=[cy, y2],
-                    mode="lines",
-                    line=dict(color="#67e8f9", width=4),
-                    hoverinfo="skip",
-                    showlegend=False,
-                ))
-
+        # COMPRESSOR: multiple stylized blade stages
         elif name == "Compressor":
-            # Multiple compressor rotor stages
             for i in range(4):
                 sx = x + 28 + i * 32
 
                 fig.add_shape(
                     type="line",
-                    x0=sx, y0=cy - 32,
-                    x1=sx + 10, y1=cy + 32,
-                    line=dict(color="#67e8f9", width=3),
+                    x0=sx,
+                    y0=cy - 32,
+                    x1=sx + 10,
+                    y1=cy + 32,
+                    line=dict(color="#67e8f9", width=4),
                 )
+
                 fig.add_shape(
                     type="line",
-                    x0=sx + 10, y0=cy - 32,
-                    x1=sx, y1=cy + 32,
+                    x0=sx + 10,
+                    y0=cy - 32,
+                    x1=sx,
+                    y1=cy + 32,
                     line=dict(color="#a5f3fc", width=2),
                 )
 
             fig.add_shape(
                 type="line",
-                x0=x + 15, y0=cy,
-                x1=x + width - 15, y1=cy,
+                x0=x + 15,
+                y0=cy,
+                x1=x + width - 15,
+                y1=cy,
                 line=dict(color="#e2e8f0", width=3),
             )
 
+        # COMBUSTOR: chamber and flame
         elif name == "Combustor":
-            # Combustion chamber and stylized flame
             fig.add_shape(
                 type="rect",
-                x0=x + 25, y0=cy - 27,
-                x1=x + width - 25, y1=cy + 27,
+                x0=x + 25,
+                y0=cy - 27,
+                x1=x + width - 25,
+                y1=cy + 27,
                 line=dict(color="#fb923c", width=2),
                 fillcolor="rgba(249,115,22,0.12)",
             )
 
-            fig.add_trace(go.Scatter(
-                x=[cx - 28, cx - 12, cx, cx + 12, cx + 28],
-                y=[cy, cy + 15, cy - 17, cy + 15, cy],
-                mode="lines",
-                fill="toself",
-                fillcolor="rgba(249,115,22,0.55)",
-                line=dict(color="#fb923c", width=2),
-                hoverinfo="skip",
-                showlegend=False,
-            ))
+            fig.add_trace(
+                go.Scatter(
+                    x=[
+                        cx - 30, cx - 20, cx - 8,
+                        cx, cx + 10, cx + 22, cx + 30
+                    ],
+                    y=[
+                        cy, cy + 5, cy + 20,
+                        cy - 17, cy + 18, cy + 5, cy
+                    ],
+                    mode="lines",
+                    fill="toself",
+                    fillcolor="rgba(249,115,22,0.55)",
+                    line=dict(color="#fb923c", width=2),
+                    hoverinfo="skip",
+                    showlegend=False,
+                )
+            )
 
+        # TURBINE: stylized rotor stages
         elif name == "Turbine":
-            # Turbine rotor and blade stages
             for i in range(3):
                 sx = x + 38 + i * 35
 
                 fig.add_shape(
                     type="line",
-                    x0=sx, y0=cy - 30,
-                    x1=sx + 14, y1=cy + 30,
+                    x0=sx,
+                    y0=cy - 30,
+                    x1=sx + 14,
+                    y1=cy + 30,
                     line=dict(color="#c4b5fd", width=4),
                 )
+
                 fig.add_shape(
                     type="line",
-                    x0=sx + 14, y0=cy - 30,
-                    x1=sx, y1=cy + 30,
+                    x0=sx + 14,
+                    y0=cy - 30,
+                    x1=sx,
+                    y1=cy + 30,
                     line=dict(color="#a78bfa", width=2),
                 )
 
             fig.add_shape(
                 type="line",
-                x0=x + 15, y0=cy,
-                x1=x + width - 15, y1=cy,
+                x0=x + 15,
+                y0=cy,
+                x1=x + width - 15,
+                y1=cy,
                 line=dict(color="#e2e8f0", width=3),
             )
 
+        # EXHAUST: nozzle-like flow path
         elif name == "Exhaust":
-            # Exhaust duct and expanding nozzle
             fig.add_shape(
                 type="path",
                 path=(
@@ -476,13 +502,14 @@ def make_engine_diagram(selected_component):
             )
 
             fig.add_annotation(
-                x=x + width - 25, y=cy,
+                x=x + width - 25,
+                y=cy,
                 text="→",
                 showarrow=False,
                 font=dict(color="#fb923c", size=24),
             )
 
-        # Component label
+        # Component labels beneath the boxes
         fig.add_annotation(
             x=cx,
             y=y - 18,
@@ -605,7 +632,7 @@ st.sidebar.caption("44 engineered model inputs")
 st.sidebar.caption("No live telemetry")
 
 # ============================================================
-# 9. ENGINE HISTORY AND SELECTED COMPONENT
+# 9. ENGINE HISTORY
 # ============================================================
 
 history = (
@@ -619,7 +646,6 @@ if history.empty:
     st.stop()
 
 latest_cycle = int(history["cycle"].max())
-
 component_names = list(COMPONENTS.keys())
 
 if "selected_component" not in st.session_state:
@@ -628,7 +654,7 @@ if "selected_component" not in st.session_state:
 selected_component = st.session_state["selected_component"]
 
 # ============================================================
-# 10. ENGINE WORKSPACE
+# 10. ENGINE WORKSPACE AND EXPLORER
 # ============================================================
 
 section_label("ENGINE WORKSPACE")
@@ -690,7 +716,7 @@ if page in ("Mission Control", "Engine Explorer"):
     )
 
     st.caption(
-        "Diagram is a simplified conceptual flow path, not a dimensionally "
+        "This is a simplified conceptual flow path, not a dimensionally "
         "accurate engine model. Component-to-sensor associations are "
         "exploratory topics, not verified direct measurements."
     )
@@ -700,7 +726,7 @@ if page in ("Mission Control", "Engine Explorer"):
 
     relevant_sensors = [
         sensor
-        for sensor in component_info["sensors"]
+        for sensor in COMPONENTS[selected_component]["sensors"]
         if sensor in history.columns
     ]
 
@@ -727,8 +753,8 @@ if page in ("Mission Control", "Engine Explorer"):
     )
 
     st.caption(
-        "This chart displays historical data. It does not prove that the "
-        "selected sensor directly measures the selected physical component."
+        "This chart displays historical readings. It does not prove that "
+        "the selected sensor directly measures the selected component."
     )
 
 # ============================================================
@@ -736,7 +762,6 @@ if page in ("Mission Control", "Engine Explorer"):
 # ============================================================
 
 section_label("DATASET OVERVIEW")
-
 overview = st.columns(3)
 
 with overview[0]:
@@ -801,6 +826,7 @@ if analyze_clicked:
                 feature_names=feature_names,
                 engine_id=int(selected_engine),
             )
+
             report = analyze_engine(result, sensor_columns)
 
             st.session_state["aerotwin_result"] = result
@@ -817,7 +843,7 @@ has_result = (
 )
 
 # ============================================================
-# 13. PREDICTIONS AND ANALYSIS
+# 13. PREDICTIONS AND SENSOR ANALYSIS
 # ============================================================
 
 if has_result:
@@ -923,8 +949,11 @@ if has_result:
 
         st.subheader("Latest Recorded Sensor Values")
         latest = result["latest"]
+
         available_sensors = [
-            s for s in sensor_columns if s in latest.columns
+            sensor_name
+            for sensor_name in sensor_columns
+            if sensor_name in latest.columns
         ]
 
         st.dataframe(
@@ -958,12 +987,12 @@ if has_result:
         )
 
         st.caption(
-            "Historical model outputs, not ground-truth remaining life "
-            "and not validated forecasts of future engine behaviour."
+            "These are model outputs for recorded observations, not "
+            "ground-truth remaining life or validated future forecasts."
         )
 
     # ========================================================
-    # 14. EXPORTS
+    # 14. EXPORT ANALYSIS
     # ========================================================
 
     section_label("ENGINEERING REPORTS")
@@ -1015,6 +1044,7 @@ if page == "Data Laboratory":
 # ============================================================
 
 st.divider()
+
 st.html("""
 <div style="text-align:center;color:#94a3b8;font-size:11px;
             line-height:1.9;padding:12px 0;">
