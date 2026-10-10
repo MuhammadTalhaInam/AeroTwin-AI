@@ -1,13 +1,13 @@
 
 import sys
 import html
-import math
+import base64
 from pathlib import Path
 
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 
 # ============================================================
 # 1. CONFIGURATION
@@ -169,9 +169,11 @@ CSS = """
 hr {border-color:rgba(148,163,184,.15);}
 </style>
 """
+
 st.markdown(CSS, unsafe_allow_html=True)
 
 css_path = BASE_DIR / "assets" / "aerotwin.css"
+
 if css_path.exists():
     st.markdown(
         f"<style>{css_path.read_text(encoding='utf-8')}</style>",
@@ -196,7 +198,7 @@ st.html("""
     <div style="color:#e2e8f0;font-size:11px;font-weight:800;
                 letter-spacing:1px;">AI PROGNOSTICS</div>
     <div style="color:#94a3b8;font-size:10px;margin-top:5px;">
-      RESEARCH PROTOTYPE · v2.0
+      RESEARCH PROTOTYPE · v2.1
     </div>
   </div>
 </div>
@@ -204,6 +206,7 @@ st.html("""
 """)
 
 st.title("Mission Control")
+
 st.caption(
     "Interactive turbofan visualization · Historical sensor intelligence "
     "· Remaining Useful Life estimation"
@@ -323,396 +326,224 @@ COMPONENT_COLORS = {
 }
 
 # ============================================================
-# 6. 3D GEOMETRY HELPERS
+# 6. REAL 3D TURBOFAN GLB VIEWER
 # ============================================================
 
-def add_x_cylinder(
-    fig,
-    x0,
-    x1,
-    radius,
-    color,
-    name,
-    selected=False,
-    opacity=1.0,
-    segments=28,
-):
+def render_glb_engine():
     """
-    Create a cylindrical surface along the X axis using Plotly Mesh3d.
-    The cylinder is illustrative geometry, not CAD-accurate.
+    Load the real turbofan GLB asset and display it in an
+    interactive browser-based 3D viewer.
     """
-    vertices_x = []
-    vertices_y = []
-    vertices_z = []
 
-    for x in (x0, x1):
-        for i in range(segments):
-            angle = 2 * math.pi * i / segments
-            vertices_x.append(x)
-            vertices_y.append(radius * math.cos(angle))
-            vertices_z.append(radius * math.sin(angle))
+    model_path = BASE_DIR / "assets" / "turbofan-cutaway.glb"
 
-    faces_i = []
-    faces_j = []
-    faces_k = []
-
-    for i in range(segments):
-        nxt = (i + 1) % segments
-
-        a = i
-        b = nxt
-        c = segments + i
-        d = segments + nxt
-
-        faces_i.extend([a, a, b, b])
-        faces_j.extend([b, c, c, d])
-        faces_k.extend([c, b, d, c])
-
-    # End caps
-    left_center = len(vertices_x)
-    right_center = left_center + 1
-
-    vertices_x.extend([x0, x1])
-    vertices_y.extend([0, 0])
-    vertices_z.extend([0, 0])
-
-    for i in range(segments):
-        nxt = (i + 1) % segments
-
-        faces_i.append(left_center)
-        faces_j.append(nxt)
-        faces_k.append(i)
-
-        faces_i.append(right_center)
-        faces_j.append(segments + i)
-        faces_k.append(segments + nxt)
-
-    fig.add_trace(
-        go.Mesh3d(
-            x=vertices_x,
-            y=vertices_y,
-            z=vertices_z,
-            i=faces_i,
-            j=faces_j,
-            k=faces_k,
-            color=color,
-            opacity=opacity,
-            flatshading=False,
-            name=name,
-            legendgroup=name,
-            hovertemplate=f"{name}<extra></extra>",
-            showscale=False,
-            lighting=dict(
-                ambient=0.48,
-                diffuse=0.8,
-                specular=0.45,
-                roughness=0.42,
-                fresnel=0.15,
-            ),
-            lightposition=dict(x=100, y=120, z=150),
+    if not model_path.is_file():
+        st.error("The turbofan 3D model could not be found.")
+        st.markdown(
+            "Upload the file below into the repository's `assets` folder:"
         )
-    )
+        st.code("assets/turbofan-cutaway.glb")
+        return
 
+    try:
+        model_bytes = model_path.read_bytes()
 
-def add_fan_blades(
-    fig,
-    x,
-    inner_radius,
-    outer_radius,
-    count,
-    color,
-    name,
-    selected=False,
-):
+        if not model_bytes:
+            st.error("The turbofan GLB file is empty.")
+            return
+
+        model_data = base64.b64encode(model_bytes).decode("ascii")
+
+    except OSError as exc:
+        st.error(f"Could not read the turbofan model: {exc}")
+        return
+
+    viewer_html = r"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport"
+            content="width=device-width, initial-scale=1.0">
+
+      <script type="module"
+        src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js">
+      </script>
+
+      <style>
+        * { box-sizing: border-box; }
+
+        html, body {
+          margin: 0;
+          padding: 0;
+          width: 100%;
+          background: transparent;
+          font-family: Arial, sans-serif;
+          color: #e2e8f0;
+        }
+
+        .engine-shell {
+          width: 100%;
+          overflow: hidden;
+          border: 1px solid rgba(148,163,184,.22);
+          border-radius: 15px;
+          background:
+            radial-gradient(
+              ellipse at 50% 42%,
+              rgba(8,145,178,.13),
+              transparent 65%
+            ),
+            linear-gradient(145deg,#111827,#0b1220);
+        }
+
+        .engine-topbar {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          flex-wrap: wrap;
+          gap: 10px;
+          padding: 15px 18px;
+          border-bottom: 1px solid rgba(148,163,184,.16);
+        }
+
+        .engine-title {
+          font-size: 12px;
+          font-weight: 800;
+          letter-spacing: 1.4px;
+          color: #e2e8f0;
+        }
+
+        .engine-status {
+          font-size: 10px;
+          letter-spacing: 1px;
+          color: #67e8f9;
+        }
+
+        model-viewer {
+          display: block;
+          width: 100%;
+          height: 510px;
+          background: transparent;
+          --poster-color: transparent;
+          outline: none;
+        }
+
+        .engine-help {
+          padding: 12px 16px;
+          border-top: 1px solid rgba(148,163,184,.14);
+          color: #94a3b8;
+          font-size: 11px;
+          line-height: 1.8;
+        }
+
+        .engine-help strong { color: #a5f3fc; }
+
+        .loading {
+          padding: 14px;
+          color: #67e8f9;
+          font-size: 12px;
+          text-align: center;
+        }
+
+        .error {
+          display: none;
+          padding: 22px;
+          color: #fca5a5;
+          font-size: 13px;
+          line-height: 1.7;
+        }
+
+        @media (max-width: 600px) {
+          model-viewer { height: 370px; }
+        }
+      </style>
+    </head>
+
+    <body>
+      <div class="engine-shell">
+
+        <div class="engine-topbar">
+          <div class="engine-title">
+            TURBOFAN · 3D MODEL VIEWER
+          </div>
+          <div class="engine-status" id="status">
+            INITIALIZING
+          </div>
+        </div>
+
+        <div class="loading" id="loading">
+          Loading 3D turbofan asset...
+        </div>
+
+        <model-viewer
+          id="turbofan"
+          src="data:model/gltf-binary;base64,__MODEL_DATA__"
+          alt="Interactive 3D turbofan cutaway model"
+          camera-controls
+          touch-action="pan-y"
+          interaction-prompt="auto"
+          shadow-intensity="1"
+          exposure="1.1"
+          environment-image="neutral"
+          camera-orbit="35deg 70deg auto"
+          auto-rotate
+          auto-rotate-delay="1500"
+          rotation-per-second="12deg"
+          loading="eager"
+          reveal="auto">
+
+          <div slot="progress-bar"></div>
+        </model-viewer>
+
+        <div class="error" id="error">
+          The model could not be loaded. Check your internet connection,
+          browser console and the validity of the GLB file.
+        </div>
+
+        <div class="engine-help">
+          <strong>ROTATE:</strong> Drag with your mouse.
+          &nbsp; <strong>ZOOM:</strong> Scroll.
+          &nbsp; <strong>EXPLORE:</strong> Use touch gestures.
+        </div>
+
+      </div>
+
+      <script>
+        const viewer = document.getElementById("turbofan");
+        const status = document.getElementById("status");
+        const loading = document.getElementById("loading");
+        const error = document.getElementById("error");
+
+        viewer.addEventListener("load", () => {
+          status.textContent = "MODEL LOADED";
+          loading.style.display = "none";
+          error.style.display = "none";
+        });
+
+        viewer.addEventListener("error", () => {
+          status.textContent = "LOAD FAILED";
+          loading.style.display = "none";
+          error.style.display = "block";
+        });
+      </script>
+    </body>
+    </html>
     """
-    Add stylized 3D blade surfaces arranged around the engine axis.
-    """
-    blade_color = "#67e8f9" if selected else color
 
-    for blade_index in range(count):
-        angle = 2 * math.pi * blade_index / count
-
-        # Slight blade sweep creates a more turbine-like appearance.
-        angle_inner = angle - 0.12
-        angle_outer = angle + 0.12
-
-        x_front = x - 0.055
-        x_back = x + 0.055
-
-        points = [
-            (x_front, inner_radius * math.cos(angle_inner),
-             inner_radius * math.sin(angle_inner)),
-            (x_front, outer_radius * math.cos(angle_outer),
-             outer_radius * math.sin(angle_outer)),
-            (x_back, outer_radius * math.cos(angle_outer),
-             outer_radius * math.sin(angle_outer)),
-            (x_back, inner_radius * math.cos(angle_inner),
-             inner_radius * math.sin(angle_inner)),
-        ]
-
-        bx = [p[0] for p in points]
-        by = [p[1] for p in points]
-        bz = [p[2] for p in points]
-
-        fig.add_trace(
-            go.Mesh3d(
-                x=bx,
-                y=by,
-                z=bz,
-                i=[0, 0],
-                j=[1, 2],
-                k=[2, 3],
-                color=blade_color,
-                opacity=0.96,
-                name=name,
-                legendgroup=name,
-                hovertemplate=f"{name} blade<extra></extra>",
-                showscale=False,
-                flatshading=False,
-                lighting=dict(
-                    ambient=0.55,
-                    diffuse=0.85,
-                    specular=0.4,
-                    roughness=0.4,
-                ),
-            )
-        )
-
-
-def add_engine_rings(fig, x, radius, color, name):
-    """Add thin ring details around a cylindrical engine section."""
-    angles = [
-        2 * math.pi * i / 80
-        for i in range(81)
-    ]
-
-    fig.add_trace(
-        go.Scatter3d(
-            x=[x] * len(angles),
-            y=[radius * math.cos(a) for a in angles],
-            z=[radius * math.sin(a) for a in angles],
-            mode="lines",
-            line=dict(color=color, width=4),
-            name=name,
-            hovertemplate=f"{name}<extra></extra>",
-            showlegend=False,
-        )
+    viewer_html = viewer_html.replace(
+        "__MODEL_DATA__",
+        model_data,
     )
 
-
-# ============================================================
-# 7. BUILD THE INTERACTIVE 3D TURBOFAN
-# ============================================================
-
-def make_3d_engine(selected_component):
-    fig = go.Figure()
-
-    # Each section occupies a different axial position.
-    sections = {
-        "Fan": {
-            "x0": 0.15, "x1": 0.72,
-            "radius": 1.05, "inner": 0.22,
-        },
-        "Compressor": {
-            "x0": 0.85, "x1": 2.05,
-            "radius": 0.77, "inner": 0.20,
-        },
-        "Combustor": {
-            "x0": 2.12, "x1": 3.05,
-            "radius": 0.69, "inner": 0.26,
-        },
-        "Turbine": {
-            "x0": 3.13, "x1": 4.10,
-            "radius": 0.72, "inner": 0.20,
-        },
-        "Exhaust": {
-            "x0": 4.18, "x1": 5.15,
-            "radius": 0.54, "inner": 0.18,
-        },
-    }
-
-    # Main outer casing sections.
-    for name, section in sections.items():
-        active = name == selected_component
-        base_color = COMPONENT_COLORS[name]
-
-        # A highlighted section becomes brighter.
-        color = "#67e8f9" if active else base_color
-        opacity = 0.82 if active else 0.52
-
-        add_x_cylinder(
-            fig,
-            section["x0"],
-            section["x1"],
-            section["radius"],
-            color,
-            name,
-            selected=active,
-            opacity=opacity,
-            segments=36,
-        )
-
-        add_engine_rings(
-            fig,
-            section["x0"],
-            section["radius"],
-            "#e2e8f0" if active else "#64748b",
-            name,
-        )
-
-        add_engine_rings(
-            fig,
-            section["x1"],
-            section["radius"],
-            "#e2e8f0" if active else "#64748b",
-            name,
-        )
-
-    # Central shaft through the engine.
-    add_x_cylinder(
-        fig,
-        0.2,
-        5.0,
-        0.15,
-        "#cbd5e1",
-        "Central shaft",
-        opacity=0.92,
-        segments=24,
+    components.html(
+        viewer_html,
+        height=625,
+        scrolling=False,
     )
-
-    # Fan rotor and blades.
-    add_x_cylinder(
-        fig, 0.25, 0.40, 0.28,
-        "#94a3b8", "Fan hub", opacity=1.0,
-    )
-
-    add_fan_blades(
-        fig,
-        x=0.43,
-        inner_radius=0.25,
-        outer_radius=0.98,
-        count=14,
-        color=COMPONENT_COLORS["Fan"],
-        name="Fan",
-        selected=selected_component == "Fan",
-    )
-
-    # Compressor: several stages of small rotor blades.
-    for stage_x in [0.98, 1.25, 1.52, 1.79]:
-        add_fan_blades(
-            fig,
-            x=stage_x,
-            inner_radius=0.23,
-            outer_radius=0.70,
-            count=10,
-            color=COMPONENT_COLORS["Compressor"],
-            name="Compressor",
-            selected=selected_component == "Compressor",
-        )
-
-    # Combustor: inner chamber and outer combustion casing.
-    add_x_cylinder(
-        fig,
-        2.18,
-        2.98,
-        0.43,
-        "#fb923c",
-        "Combustor inner chamber",
-        opacity=0.96,
-        segments=32,
-    )
-
-    # Turbine rotor stages.
-    for stage_x in [3.35, 3.72, 4.00]:
-        add_fan_blades(
-            fig,
-            x=stage_x,
-            inner_radius=0.22,
-            outer_radius=0.66,
-            count=12,
-            color=COMPONENT_COLORS["Turbine"],
-            name="Turbine",
-            selected=selected_component == "Turbine",
-        )
-
-    # Exhaust nozzle: gradually changing radius.
-    add_x_cylinder(
-        fig,
-        4.25,
-        5.02,
-        0.43,
-        COMPONENT_COLORS["Exhaust"],
-        "Exhaust inner nozzle",
-        opacity=0.78,
-        segments=32,
-    )
-
-    # Add axial flow direction.
-    fig.add_trace(
-        go.Scatter3d(
-            x=[0.1, 5.35],
-            y=[0, 0],
-            z=[1.28, 1.28],
-            mode="lines+text",
-            line=dict(color="#67e8f9", width=5),
-            text=["AIR INLET", "EXHAUST FLOW"],
-            textposition="top center",
-            textfont=dict(color="#a5f3fc", size=10),
-            name="Flow direction",
-            hoverinfo="skip",
-            showlegend=False,
-        )
-    )
-
-    fig.update_layout(
-        title=dict(
-            text=(
-                "INTERACTIVE TURBOFAN · "
-                + html.escape(selected_component.upper())
-                + " SELECTED"
-            ),
-            font=dict(color="#f1f5f9", size=16),
-            x=0.02,
-        ),
-        template="plotly_dark",
-        height=600,
-        margin=dict(l=0, r=0, t=60, b=0),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        showlegend=False,
-        scene=dict(
-            bgcolor="rgba(0,0,0,0)",
-            xaxis=dict(
-                title="Engine axis",
-                visible=False,
-                range=[-0.1, 5.5],
-                showbackground=False,
-            ),
-            yaxis=dict(
-                visible=False,
-                range=[-1.45, 1.45],
-                showbackground=False,
-            ),
-            zaxis=dict(
-                visible=False,
-                range=[-1.45, 1.55],
-                showbackground=False,
-            ),
-            aspectmode="manual",
-            aspectratio=dict(x=2.7, y=1.25, z=1.25),
-            camera=dict(
-                eye=dict(x=1.65, y=1.7, z=1.15),
-                up=dict(x=0, y=0, z=1),
-            ),
-        ),
-        uirevision="aerotwin-engine-camera",
-    )
-
-    return fig
 
 
 # ============================================================
-# 8. LOAD MODEL AND HISTORICAL DATA
+# 7. LOAD MODEL AND HISTORICAL DATA
 # ============================================================
 
 @st.cache_resource
@@ -735,21 +566,31 @@ try:
         model = get_model()
         feature_names = get_features()
         data = get_data()
+
 except Exception as exc:
     st.error(f"Could not initialize model or dataset: {exc}")
     st.stop()
 
+
 if len(feature_names) != 44:
     st.error(
         f"Expected 44 engineered features, found {len(feature_names)}. "
-        "Check the model and feature-name file."
+        "Check the trained model and feature-name file."
     )
     st.stop()
 
+
 sensor_columns = [
-    "sensor_2", "sensor_3", "sensor_4", "sensor_7",
-    "sensor_11", "sensor_12", "sensor_14", "sensor_17",
-    "sensor_20", "sensor_21",
+    "sensor_2",
+    "sensor_3",
+    "sensor_4",
+    "sensor_7",
+    "sensor_11",
+    "sensor_12",
+    "sensor_14",
+    "sensor_17",
+    "sensor_20",
+    "sensor_21",
 ]
 
 required = {"engine_id", "cycle", *feature_names, *sensor_columns}
@@ -760,7 +601,7 @@ if missing:
     st.stop()
 
 # ============================================================
-# 9. SIDEBAR
+# 8. SIDEBAR NAVIGATION
 # ============================================================
 
 st.sidebar.markdown("## ✈️ AEROTWIN")
@@ -795,7 +636,7 @@ st.sidebar.caption("44 engineered model inputs")
 st.sidebar.caption("No live telemetry")
 
 # ============================================================
-# 10. SELECTED ENGINE HISTORY
+# 9. SELECTED ENGINE HISTORY
 # ============================================================
 
 history = (
@@ -819,26 +660,37 @@ if st.session_state["selected_component"] not in component_names:
 
 selected_component = st.session_state["selected_component"]
 
+# Clear results when a different engine is selected.
+if st.session_state.get("aerotwin_engine") != int(selected_engine):
+    st.session_state.pop("aerotwin_result", None)
+    st.session_state.pop("aerotwin_report", None)
+    st.session_state.pop("aerotwin_engine", None)
+
 # ============================================================
-# 11. ENGINE WORKSPACE
+# 10. ENGINE WORKSPACE
 # ============================================================
 
 section_label("ENGINE WORKSPACE")
-st.subheader(f"Engine {int(selected_engine):03d} — Analysis Console")
+
+st.subheader(
+    f"Engine {int(selected_engine):03d} — Analysis Console"
+)
+
 st.caption(
     f"{len(history):,} recorded observations · "
     f"Latest recorded cycle: {latest_cycle}"
 )
 
 if page in ("Mission Control", "Engine Explorer"):
+
     section_label("INTERACTIVE 3D TURBOFAN")
 
     st.markdown(
-        "Select a component below. Drag to rotate, scroll to zoom, "
-        "and use the interactive 3D controls to explore the model."
+        "Explore the downloaded turbofan model. Drag to rotate, "
+        "scroll to zoom, and use the component selector to explore "
+        "engineering information."
     )
 
-    # Component selection controls.
     component_cols = st.columns(5)
 
     for index, name in enumerate(component_names):
@@ -858,30 +710,13 @@ if page in ("Mission Control", "Engine Explorer"):
 
     selected_component = st.session_state["selected_component"]
 
-    # Display the interactive model.
-    with st.spinner("Building interactive 3D engine geometry..."):
-        engine_figure = make_3d_engine(selected_component)
-
-    st.plotly_chart(
-        engine_figure,
-        use_container_width=True,
-        config={
-            "displayModeBar": True,
-            "scrollZoom": True,
-            "displaylogo": False,
-            "modeBarButtonsToRemove": [
-                "toImage",
-                "lasso2d",
-                "select2d",
-            ],
-        },
-        key="aerotwin_3d_engine",
-    )
+    with st.spinner("Loading the turbofan 3D model..."):
+        render_glb_engine()
 
     st.caption(
-        "Conceptual 3D visualization generated from simplified geometry. "
-        "It is not a dimensionally accurate CAD model, CFD simulation, "
-        "or live engine digital twin."
+        "The displayed GLB is a 3D asset. Its rotation is a visual "
+        "interaction, not a physical engine simulation. It is not "
+        "connected to live aircraft telemetry or the RUL model."
     )
 
     component_info = COMPONENTS[selected_component]
@@ -914,38 +749,43 @@ if page in ("Mission Control", "Engine Explorer"):
         if sensor in history.columns
     ]
 
-    chosen_sensor = st.selectbox(
-        "Choose a historical sensor",
-        relevant_sensors,
-        key=f"sensor_for_{selected_component}",
-    )
+    if relevant_sensors:
+        chosen_sensor = st.selectbox(
+            "Choose a historical sensor",
+            relevant_sensors,
+            key=f"sensor_for_{selected_component}",
+        )
 
-    fig_component = px.line(
-        history,
-        x="cycle",
-        y=chosen_sensor,
-        title=f"{chosen_sensor} · Engine {int(selected_engine):03d}",
-        labels={
-            "cycle": "Recorded cycle",
-            chosen_sensor: "Recorded sensor value",
-        },
-    )
+        fig_component = px.line(
+            history,
+            x="cycle",
+            y=chosen_sensor,
+            title=(
+                f"{chosen_sensor} · "
+                f"Engine {int(selected_engine):03d}"
+            ),
+            labels={
+                "cycle": "Recorded cycle",
+                chosen_sensor: "Recorded sensor value",
+            },
+        )
 
-    st.plotly_chart(
-        chart_style(fig_component),
-        use_container_width=True,
-    )
+        st.plotly_chart(
+            chart_style(fig_component),
+            use_container_width=True,
+        )
 
     st.caption(
-        "These are historical sensor readings. The selected sensor is not "
-        "a verified direct measurement of the selected physical component."
+        "Historical sensor readings are not verified direct measurements "
+        "of the selected physical component."
     )
 
 # ============================================================
-# 12. DATASET OVERVIEW
+# 11. DATASET OVERVIEW
 # ============================================================
 
 section_label("DATASET OVERVIEW")
+
 overview = st.columns(3)
 
 with overview[0]:
@@ -973,7 +813,7 @@ with overview[2]:
     )
 
 # ============================================================
-# 13. RUN MODEL ANALYSIS
+# 12. RUN MODEL ANALYSIS
 # ============================================================
 
 col_button, col_mode = st.columns([1.4, 1])
@@ -996,14 +836,9 @@ with col_mode:
         unsafe_allow_html=True,
     )
 
-if st.session_state.get("aerotwin_engine") != int(selected_engine):
-    st.session_state.pop("aerotwin_result", None)
-    st.session_state.pop("aerotwin_report", None)
-    st.session_state.pop("aerotwin_engine", None)
-
 if analyze_clicked:
     try:
-        with st.spinner("Running trained model and sensor analysis..."):
+        with st.spinner("Running model and sensor analysis..."):
             result = predict_engine(
                 model=model,
                 data=data,
@@ -1024,13 +859,15 @@ if analyze_clicked:
 has_result = (
     "aerotwin_result" in st.session_state
     and "aerotwin_report" in st.session_state
+    and st.session_state.get("aerotwin_engine") == int(selected_engine)
 )
 
 # ============================================================
-# 14. PREDICTIONS AND SENSOR ANALYSIS
+# 13. PREDICTIONS AND SENSOR ANALYSIS
 # ============================================================
 
 if has_result:
+
     result = st.session_state["aerotwin_result"]
     report = st.session_state["aerotwin_report"]
 
@@ -1038,6 +875,7 @@ if has_result:
     reported_cycle = int(report["latest_cycle"])
 
     section_label("MODEL OUTPUTS")
+
     metrics = st.columns(3)
 
     with metrics[0]:
@@ -1060,7 +898,7 @@ if has_result:
         metric_card(
             "Model Features",
             f"{len(feature_names)}/44",
-            "Engineered inputs",
+            "Engineered model inputs",
             "#34d399",
         )
 
@@ -1080,20 +918,25 @@ if has_result:
         )
     elif prediction <= 70:
         st.info(
-            "The model returned a moderate RUL estimate. Validate the model "
-            "on appropriate held-out data before drawing engineering conclusions."
+            "The model returned a moderate RUL estimate. Validate the "
+            "model on appropriate held-out data before drawing conclusions."
         )
     else:
         st.success(
-            "The model returned a higher RUL estimate. This does not certify "
-            "the engine as healthy or safe."
+            "The model returned a higher RUL estimate. This does not "
+            "certify the engine as healthy or safe."
         )
+
+    # --------------------------------------------------------
+    # SENSOR DIAGNOSTICS
+    # --------------------------------------------------------
 
     if page in (
         "Mission Control",
         "Engine Explorer",
         "Sensor Diagnostics",
     ):
+
         section_label("SENSOR INTELLIGENCE")
         st.subheader("Sensor Trend Explorer")
 
@@ -1116,6 +959,7 @@ if has_result:
         )
 
         st.subheader("Recent Sensor Analysis")
+
         st.dataframe(
             report["sensor_report"],
             use_container_width=True,
@@ -1123,6 +967,7 @@ if has_result:
         )
 
         st.subheader("Largest Relative Changes vs Recent Readings")
+
         st.dataframe(
             report["largest_recent_changes"],
             use_container_width=True,
@@ -1132,6 +977,7 @@ if has_result:
         st.caption(report["notice"])
 
         st.subheader("Latest Recorded Sensor Values")
+
         latest = result["latest"]
 
         available_sensors = [
@@ -1146,7 +992,12 @@ if has_result:
             hide_index=True,
         )
 
+    # --------------------------------------------------------
+    # RUL HISTORY
+    # --------------------------------------------------------
+
     if page in ("Mission Control", "Prognostics"):
+
         section_label("RUL HISTORY")
         st.subheader("Model Outputs Across Recorded History")
 
@@ -1175,9 +1026,9 @@ if has_result:
             "ground-truth remaining life or validated future forecasts."
         )
 
-    # ========================================================
-    # 15. EXPORT ANALYSIS
-    # ========================================================
+    # --------------------------------------------------------
+    # EXPORT ENGINEERING REPORT
+    # --------------------------------------------------------
 
     section_label("ENGINEERING REPORTS")
     st.subheader("Export Analysis")
@@ -1190,7 +1041,9 @@ if has_result:
     st.download_button(
         "Download Sensor Analysis CSV",
         data=export_df.to_csv(index=False).encode("utf-8"),
-        file_name=f"aerotwin_engine_{int(selected_engine)}_analysis.csv",
+        file_name=(
+            f"aerotwin_engine_{int(selected_engine)}_analysis.csv"
+        ),
         mime="text/csv",
         use_container_width=True,
     )
@@ -1198,14 +1051,15 @@ if has_result:
 else:
     st.info(
         "Press ANALYZE ENGINE to calculate the RUL estimate and display "
-        "sensor-analysis results. The Engine Explorer can be explored independently."
+        "sensor-analysis results. The 3D model can be explored independently."
     )
 
 # ============================================================
-# 16. DATA LABORATORY
+# 14. DATA LABORATORY
 # ============================================================
 
 if page == "Data Laboratory":
+
     section_label("DATA LABORATORY")
     st.subheader("Selected Engine History")
 
@@ -1224,7 +1078,7 @@ if page == "Data Laboratory":
     )
 
 # ============================================================
-# 17. FOOTER
+# 15. FOOTER
 # ============================================================
 
 st.divider()
@@ -1232,9 +1086,11 @@ st.divider()
 st.html("""
 <div style="text-align:center;color:#94a3b8;font-size:11px;
             line-height:1.9;padding:12px 0;">
-  <strong style="color:#cbd5e1;letter-spacing:1px;">AEROTWIN AI</strong>
+  <strong style="color:#cbd5e1;letter-spacing:1px;">
+    AEROTWIN AI
+  </strong>
   <br>
-  Interactive 3D Engine Explorer · NASA C-MAPSS FD001 · v2.0
+  Interactive 3D Turbofan · NASA C-MAPSS FD001 · v2.1
   <br>
   Historical research prototype — not certified for operational decisions.
 </div>
